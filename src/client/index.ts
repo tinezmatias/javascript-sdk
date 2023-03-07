@@ -2,17 +2,16 @@
 import Big, { BigSource } from "big.js"
 
 import * as crypto from "../crypto"
-import LedgerApp, { PublicKey, SignedSignature } from "../ledger/ledger-app"
 import Transaction from "../tx"
 import { AminoPrefix, Coin, ListMiniMsg } from "../types/"
 import HttpRequest from "../utils/request"
 import { checkNumber } from "../utils/validateHelper"
 
+import { Bridge } from "./bridge"
 import Gov from "./gov"
+import { Stake } from "./stake"
 import Swap from "./swap"
 import TokenManagement, { validateMiniTokenSymbol } from "./token"
-import { Bridge } from "./bridge"
-import { Stake } from "./stake"
 
 const BASENUMBER = Math.pow(10, 8)
 
@@ -67,39 +66,6 @@ export const DefaultBroadcastDelegate = async function (
   return this.sendTransaction(signedTx, true)
 }
 
-/**
- * The Ledger signing delegate.
- * @param  {LedgerApp}  ledgerApp
- * @param  {preSignCb}  function
- * @param  {postSignCb} function
- * @param  {errCb} function
- * @return {function}
- */
-export const LedgerSigningDelegate = (
-  ledgerApp: LedgerApp,
-  preSignCb: (preSignCb: Buffer) => void,
-  postSignCb: (pubKeyResp: PublicKey, sigResp: SignedSignature) => void,
-  errCb: (error: any) => void,
-  hdPath: number[]
-): typeof DefaultSigningDelegate =>
-  async function (tx, signMsg) {
-    const signBytes = tx.getSignBytes(signMsg)
-    preSignCb && preSignCb(signBytes)
-    let pubKeyResp: PublicKey, sigResp: SignedSignature
-    try {
-      pubKeyResp = await ledgerApp.getPublicKey(hdPath)
-      sigResp = await ledgerApp.sign(signBytes, hdPath)
-      postSignCb && postSignCb(pubKeyResp, sigResp)
-    } catch (err) {
-      console.warn("LedgerSigningDelegate error", err)
-      errCb && errCb(err)
-    }
-    if (sigResp! && sigResp!.signature) {
-      const pubKey = crypto.getPublicKey(pubKeyResp!.pk!.toString("hex"))
-      return tx.addSignature(pubKey, sigResp!.signature)
-    }
-    return tx
-  }
 
 /**
  * validate the input number.
@@ -310,19 +276,6 @@ export class BncClient {
    */
   useDefaultBroadcastDelegate(): BncClient {
     this._broadcastDelegate = DefaultBroadcastDelegate
-    return this
-  }
-
-  /**
-   * Applies the Ledger signing delegate.
-   * @param {function} ledgerApp
-   * @param {function} preSignCb
-   * @param {function} postSignCb
-   * @param {function} errCb
-   * @return {BncClient} this instance (for chaining)
-   */
-  useLedgerSigningDelegate(...args: Parameters<typeof LedgerSigningDelegate>) {
-    this._signingDelegate = LedgerSigningDelegate(...args)
     return this
   }
 
